@@ -1,0 +1,70 @@
+// lib/types.ts
+// Shared TypeScript interfaces matching the Couchbase document schemas.
+
+export interface Student {
+  type: "student";
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  dateOfBirth: string; // ISO 8601
+  enrolledAt: string; // ISO 8601
+  status: "active" | "inactive" | "suspended";
+}
+
+export interface Teacher {
+  type: "teacher";
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  department: string;
+  hiredAt: string; // ISO 8601
+  status: "active" | "inactive";
+}
+
+export interface Course {
+  type: "course";
+  id: string;
+  code: string;
+  title: string;
+  description: string;
+  creditHours: number;
+  department: string;
+}
+
+export interface Enrollment {
+  type: "enrollment";
+  id: string;
+  studentId: string;
+  courseId: string;
+  enrolledAt: string; // ISO 8601
+  grade: string | null;
+  status: "active" | "completed" | "dropped";
+}
+
+export interface Class {
+  type: "class";
+  id: string;
+  courseId: string;
+  teacherId: string;
+  studentIds: string[];
+  semester: string;
+  year: number;
+  room: string;
+  schedule: string;
+}
+
+// Health check response shape
+export interface NodeHealth {
+  ip: string;
+  status: "up" | "down";
+  latencyMs: number | null;
+}
+
+export interface HealthResponse {
+  clusterStatus: "healthy" | "degraded" | "down";
+  nodes: Record<string, NodeHealth>;
+  collections: Record<string, "available" | "unavailable">;
+  queryStatus: "ok" | "failed";
+}
