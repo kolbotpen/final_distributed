@@ -1,51 +1,48 @@
 // lib/couchbase.ts
-// Cluster connection factory.
+// Per-domain cluster connection factory.
 //
-// The SDK connection string lists all 5 node IPs separated by commas.
-// On first connect the SDK performs topology discovery and learns the full
-// cluster map (which vBuckets live on which node).  After that every KV
-// operation is routed directly to the correct node without a coordinator —
-// this is the shared-nothing behaviour.
+// Each domain (students, teachers, courses, enrollments, classes) has its own
+// dedicated single-node Couchbase instance on a separate Droplet.
+// A separate connection is cached per domain so repeated API calls reuse the
+// same established TCP connection to that node.
 //
-// The module-level `clusterConnection` caches one Cluster object per process
-// so that repeated API calls reuse the same established connections.
+// Fault isolation: if the students Droplet goes down, calling getCollection()
+// for teachers/courses/etc. is completely unaffected — they connect to
+// entirely different servers.
 
 import * as couchbase from "couchbase";
-import { CLUSTER_CONFIG, CollectionName } from "@/config/cluster";
+import { DOMAIN_NODES, AUTH, DomainName } from "@/config/cluster";
 
-let clusterConnection: couchbase.Cluster | null = null;
+// One cached Cluster connection per domain
+const connections = new Map<DomainName, couchbase.Cluster>();
 
-export async function getCluster(): Promise<couchbase.Cluster> {
-  if (clusterConnection) return clusterConnection;
+export async function getClusterForDomain(
+  domain: DomainName
+): Promise<couchbase.Cluster> {
+  const cached = connections.get(domain);
+  if (cached) return cached;
 
-  // Multi-node connection string — SDK auto-discovers the rest of the topology
-  const connectionString = `couchbase://${CLUSTER_CONFIG.bootstrapNodes.join(",")}`;
-
-  clusterConnection = await couchbase.connect(connectionString, {
-    username: CLUSTER_CONFIG.auth.username,
-    password: CLUSTER_CONFIG.auth.password,
+  const node = DOMAIN_NODES[domain];
+  const cluster = await couchbase.connect(`couchbase://${node.ip}`, {
+    username: AUTH.username,
+    password: AUTH.password,
     timeouts: {
-      kvTimeout: 5000,      // Key-Value operations (direct node routing)
-      queryTimeout: 10000,  // N1QL queries (may fan-out across nodes)
+      kvTimeout: 5000,
+      queryTimeout: 10000,
       connectTimeout: 15000,
     },
   });
 
-  return clusterConnection;
+  connections.set(domain, cluster);
+  return cluster;
 }
 
 export async function getCollection(
-  collectionName: CollectionName
+  domain: DomainName
 ): Promise<couchbase.Collection> {
-  const cluster = await getCluster();
-  const bucket = cluster.bucket(CLUSTER_CONFIG.bucket);
-  const scope = bucket.scope(CLUSTER_CONFIG.scope);
-  return scope.collection(CLUSTER_CONFIG.collections[collectionName]);
-}
-
-/** Convenience: returns the cluster's bucket scope for raw N1QL queries */
-export async function getScope(): Promise<couchbase.Scope> {
-  const cluster = await getCluster();
-  const bucket = cluster.bucket(CLUSTER_CONFIG.bucket);
-  return bucket.scope(CLUSTER_CONFIG.scope);
+  const cluster = await getClusterForDomain(domain);
+  const node = DOMAIN_NODES[domain];
+  const bucket = cluster.bucket(node.bucket);
+  const scope  = bucket.scope(node.scope);
+  return scope.collection(node.collection);
 }

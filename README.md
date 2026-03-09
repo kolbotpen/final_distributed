@@ -1,78 +1,69 @@
-# University — Distributed Cluster
+# University — Distributed System
 
-A Next.js university management system backed by a **5-node shared-nothing Couchbase cluster** deployed on DigitalOcean.
+A Next.js university management system backed by **5 independent single-node Couchbase instances** deployed on DigitalOcean — one dedicated Droplet per data domain.
 
 ---
 
 ## Architecture Overview
 
 ```
-[ Node 1 ] ←——→ [ Node 2 ]
-    ↕    ✕    ↕
-[ Node 3 ] ←——→ [ Node 4 ]
-         ↕
-      [ Node 5 ]
+                  ┌─────────────────────┐
+   Browser ──────▶│  Next.js (Gateway)  │
+                  └──────┬──────────────┘
+          ┌───────┬──────┼──────┬───────┐
+          ▼       ▼      ▼      ▼       ▼
+     [students] [teachers] [courses] [enrollments] [classes]
+      Droplet   Droplet   Droplet    Droplet       Droplet
+       (CB)      (CB)      (CB)       (CB)          (CB)
 
-All nodes: peer-to-peer gossip, vBucket rebalancing, no coordinator
-Next.js connects to any/all nodes as bootstrap — SDK handles the rest
+Each Droplet runs one Couchbase instance hosting exactly one collection.
+Next.js API routes act as the gateway — connecting to whichever node owns
+the requested domain. Cross-domain queries fan out in parallel.
 ```
 
-### Why this is genuinely shared-nothing
+### Why this is shared-nothing
 
-| Property | How Couchbase implements it |
+| Property | How this architecture implements it |
 |---|---|
-| No shared memory | Each node is a separate Droplet; they never access each other's RAM |
-| No shared disk | Each node's KV data lives in its own OS filesystem |
-| Data partitioning | 1 024 **vBuckets** are distributed evenly across all nodes (~205 each at rest) |
-| Peer topology | Nodes discover each other via **Erlang/BEAM's distributed gossip** |
-| No coordinator | The client SDK fetches the vBucket map and routes every KV op **directly** to the owning node |
-| Query fan-out | N1QL queries are sent to any Query-service node; that node fans out to the relevant Data nodes |
-| Scope isolation | Each data domain (`students`, `teachers`, …) lives in its own Collection; RBAC and errors are scoped to the collection level |
+| No shared memory | 5 completely separate OS processes on 5 separate Droplets |
+| No shared disk | Each Droplet has its own filesystem; no NFS or shared block storage |
+| Domain isolation | A failure on the `students` node has zero impact on `courses` or `teachers` |
+| Independent scaling | Each domain node can be resized or replaced without touching the others |
+| No coordinator | The Next.js API routes directly to the correct node by domain; there is no cluster map or gossip |
+| Fault-tolerant reads | Cross-domain endpoints (`enrollments/[id]`, `classes/[id]`) use `safeFetch` so a single unavailable domain returns a partial result instead of an error |
 
 ---
 
 ## 1 — Provision 5 DigitalOcean Droplets
 
-1. Log in to the [DigitalOcean Control Panel](https://cloud.digitalocean.com).
-2. Create **5 Droplets** with these specs (adjust size as needed):
-   - **Image**: Ubuntu 22.04 LTS
-   - **Size**: 4 vCPU / 8 GB RAM minimum (16 GB preferred for a real workload)
-   - **Region**: all in the same region so inter-node latency is <2 ms
-   - **Firewall / Networking**:  
-     Open the following ports between all 5 Droplets (use a DigitalOcean Firewall group):
+Create **5 separate Droplets** — one per domain:
 
-     | Port | Service |
-     |------|---------|
-     | 8091 | Couchbase Management REST API |
-     | 8092 | Views |
-     | 8093 | N1QL / Query |
-     | 8094 | Full-Text Search |
-     | 11210 | KV (TCP) |
-     | 4369 | Erlang Port Mapper |
-     | 21100–21299 | Internal node communication |
+| Droplet | Domain | Collection |
+|---------|--------|-----------|
+| Droplet A | Students | `university.academic.students` |
+| Droplet B | Teachers | `university.academic.teachers` |
+| Droplet C | Courses | `university.academic.courses` |
+| Droplet D | Enrollments | `university.academic.enrollments` |
+| Droplet E | Classes | `university.academic.classes` |
 
-3. Note the **public IP** of each Droplet — you will need them in `.env.local`.
+Recommended specs:
+- **Image**: Ubuntu 22.04 LTS
+- **Size**: 2 vCPU / 4 GB RAM (each node only serves one collection)
+- **Firewall**: open ports **8091** (Management), **8093** (N1QL/Query), and **11210** (KV) from your Next.js server's IP only
 
 ### Install Couchbase on each Droplet
 
 SSH into each Droplet and run:
 
 ```bash
-# Add Couchbase repository
-curl -o /etc/apt/sources.list.d/couchbase.list \
+curl -o couchbase-release.deb \
   https://packages.couchbase.com/releases/couchbase-release/couchbase-release-1.0-amd64.deb
-dpkg -i couchbase-release-1.0-amd64.deb
-apt-get update
-
-# Install Couchbase Server 7.x
-apt-get install -y couchbase-server
-
-# Start the service
-systemctl enable couchbase-server
-systemctl start couchbase-server
+dpkg -i couchbase-release.deb
+apt-get update && apt-get install -y couchbase-server
+systemctl enable couchbase-server && systemctl start couchbase-server
 ```
 
-Repeat on all 5 nodes.
+Repeat on all 5 Droplets.
 
 ---
 

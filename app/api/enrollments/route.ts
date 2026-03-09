@@ -1,7 +1,7 @@
 // app/api/enrollments/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getCluster, getCollection } from "@/lib/couchbase";
+import { getClusterForDomain, getCollection } from "@/lib/couchbase";
 import { Enrollment } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     }
     query += " ORDER BY e.enrolledAt DESC LIMIT $limit OFFSET $offset";
 
-    const cluster = await getCluster();
+    const cluster = await getClusterForDomain("enrollments");
     const result = await cluster.query(query, { parameters: params });
 
     return NextResponse.json({ data: result.rows, limit, offset });

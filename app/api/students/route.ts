@@ -1,7 +1,7 @@
 // app/api/students/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getCluster, getCollection } from "@/lib/couchbase";
+import { getClusterForDomain, getCollection } from "@/lib/couchbase";
 import { Student } from "@/lib/types";
 
 // GET /api/students?limit=20&offset=0
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "20", 10), 100);
     const offset = parseInt(searchParams.get("offset") ?? "0", 10);
 
-    const cluster = await getCluster();
+    const cluster = await getClusterForDomain("students");
     const result = await cluster.query(
       `SELECT s.* FROM \`university\`.\`academic\`.\`students\` s
        WHERE s.type = 'student'

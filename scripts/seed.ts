@@ -1,10 +1,12 @@
 // scripts/seed.ts
 // Run with: npm run seed
-// Inserts 5 sample documents into each collection.
+// Inserts 5 sample documents into each domain's dedicated Couchbase node.
+// Each domain is a separate single-node instance; this script connects to
+// each one independently so no single failure affects the other domains.
 
 import * as couchbase from "couchbase";
 import { v4 as uuidv4 } from "uuid";
-import { CLUSTER_CONFIG } from "../config/cluster";
+import { DOMAIN_NODES, AUTH, DomainName } from "../config/cluster";
 import { Student, Teacher, Course, Enrollment, Class } from "../lib/types";
 
 // ── Sample data ──────────────────────────────────────────────────────────────
@@ -33,7 +35,17 @@ const STUDENTS: Omit<Student, "id">[] = [
   { type: "student", firstName: "Nikolai", lastName: "Ivanov",   email: "n.ivanov@students.edu",      dateOfBirth: "2000-09-05T00:00:00Z", enrolledAt: "2020-09-01T00:00:00Z", status: "inactive" },
 ];
 
-// ── Seeder ────────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function connectToDomain(domain: DomainName) {
+  const node = DOMAIN_NODES[domain];
+  console.log(`\n[${domain}] Connecting to ${node.ip}…`);
+  return couchbase.connect(`couchbase://${node.ip}`, {
+    username: AUTH.username,
+    password: AUTH.password,
+    timeouts: { connectTimeout: 15000, kvTimeout: 10000 },
+  });
+}
 
 async function insertAll<T extends { id?: string }>(
   collection: couchbase.Collection,
@@ -49,31 +61,40 @@ async function insertAll<T extends { id?: string }>(
   return ids;
 }
 
+// ── Main ──────────────────────────────────────────────────────────────────────
+
 async function main() {
-  const connectionString = `couchbase://${CLUSTER_CONFIG.bootstrapNodes.join(",")}`;
-  console.log(`Connecting to ${connectionString}…\n`);
-
-  const cluster = await couchbase.connect(connectionString, {
-    username: CLUSTER_CONFIG.auth.username,
-    password: CLUSTER_CONFIG.auth.password,
-    timeouts: { connectTimeout: 15000, kvTimeout: 10000 },
-  });
-
-  const bucket = cluster.bucket(CLUSTER_CONFIG.bucket);
-  const scope  = bucket.scope(CLUSTER_CONFIG.scope);
-
+  // ── Teachers node ──────────────────────────────────────────────────────────
+  let cluster = await connectToDomain("teachers");
   console.log("Seeding teachers…");
-  const teacherIds = await insertAll<Teacher>(scope.collection("teachers"), TEACHERS);
+  const teacherIds = await insertAll<Teacher>(
+    cluster.bucket("university").scope("academic").collection("teachers"),
+    TEACHERS,
+  );
+  await cluster.close();
 
-  console.log("\nSeeding courses…");
-  const courseIds = await insertAll<Course>(scope.collection("courses"), COURSES);
+  // ── Courses node ───────────────────────────────────────────────────────────
+  cluster = await connectToDomain("courses");
+  console.log("Seeding courses…");
+  const courseIds = await insertAll<Course>(
+    cluster.bucket("university").scope("academic").collection("courses"),
+    COURSES,
+  );
+  await cluster.close();
 
-  console.log("\nSeeding students…");
-  const studentIds = await insertAll<Student>(scope.collection("students"), STUDENTS);
+  // ── Students node ──────────────────────────────────────────────────────────
+  cluster = await connectToDomain("students");
+  console.log("Seeding students…");
+  const studentIds = await insertAll<Student>(
+    cluster.bucket("university").scope("academic").collection("students"),
+    STUDENTS,
+  );
+  await cluster.close();
 
-  // Enrollments: each student enrolled in one course
-  console.log("\nSeeding enrollments…");
-  const enrollmentIds: string[] = [];
+  // ── Enrollments node ───────────────────────────────────────────────────────
+  cluster = await connectToDomain("enrollments");
+  console.log("Seeding enrollments…");
+  const enrollmentsCol = cluster.bucket("university").scope("academic").collection("enrollments");
   for (let i = 0; i < 5; i++) {
     const id = uuidv4();
     const doc: Enrollment = {
@@ -82,16 +103,19 @@ async function main() {
       studentId: studentIds[i],
       courseId:  courseIds[i % courseIds.length],
       enrolledAt: new Date().toISOString(),
-      grade: i < 3 ? ["A", "B+", "A-"][i] : null,
+      grade: i < 3 ? (["A", "B+", "A-"] as const)[i] : null,
       status: i < 4 ? "active" : "completed",
     };
-    await scope.collection("enrollments").upsert(id, doc);
-    enrollmentIds.push(id);
+    await enrollmentsCol.upsert(id, doc);
     console.log(`  Inserted ${id}`);
   }
+  await cluster.close();
 
-  // Classes: one class per course, using the matching teacher
-  console.log("\nSeeding classes…");
+  // ── Classes node ───────────────────────────────────────────────────────────
+  cluster = await connectToDomain("classes");
+  console.log("Seeding classes…");
+  const classesCol = cluster.bucket("university").scope("academic").collection("classes");
+  const schedules = ["Mon/Wed 9:00–10:30", "Tue/Thu 11:00–12:30", "Mon/Wed/Fri 14:00–15:00", "Tue/Thu 14:00–16:00", "Fri 9:00–12:00"] as const;
   for (let i = 0; i < 5; i++) {
     const id = uuidv4();
     const doc: Class = {
@@ -99,18 +123,18 @@ async function main() {
       id,
       courseId:   courseIds[i],
       teacherId:  teacherIds[i],
-      studentIds: studentIds.slice(0, 3 + (i % 3)), // 3–5 students per class
+      studentIds: studentIds.slice(0, 3 + (i % 3)),
       semester:   i % 2 === 0 ? "Fall" : "Spring",
       year:       2024 + Math.floor(i / 2),
       room:       `Building ${String.fromCharCode(65 + i)}-${101 + i * 10}`,
-      schedule:   ["Mon/Wed 9:00–10:30", "Tue/Thu 11:00–12:30", "Mon/Wed/Fri 14:00–15:00", "Tue/Thu 14:00–16:00", "Fri 9:00–12:00"][i],
+      schedule:   schedules[i],
     };
-    await scope.collection("classes").upsert(id, doc);
+    await classesCol.upsert(id, doc);
     console.log(`  Inserted ${id}`);
   }
-
   await cluster.close();
-  console.log("\nSeed complete. 5 documents inserted into each collection.");
+
+  console.log("\nSeed complete. 5 documents inserted into each of the 5 domain nodes.");
 }
 
 main().catch((err) => {

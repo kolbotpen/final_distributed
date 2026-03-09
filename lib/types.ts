@@ -55,16 +55,16 @@ export interface Class {
   schedule: string;
 }
 
-// Health check response shape
-export interface NodeHealth {
+// Health check response shape — one entry per domain node
+export interface DomainHealth {
+  domain: string;
   ip: string;
-  status: "up" | "down";
+  nodeStatus: "up" | "down";
   latencyMs: number | null;
 }
 
 export interface HealthResponse {
-  clusterStatus: "healthy" | "degraded" | "down";
-  nodes: Record<string, NodeHealth>;
-  collections: Record<string, "available" | "unavailable">;
-  queryStatus: "ok" | "failed";
+  overallStatus: "healthy" | "degraded" | "down";
+  // Keys are domain names: students, teachers, courses, enrollments, classes
+  domains: Record<string, DomainHealth>;
 }

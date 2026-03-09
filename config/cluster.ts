@@ -1,40 +1,55 @@
 // config/cluster.ts
-// Single source of truth for all Couchbase node IPs and cluster settings.
-// After provisioning 5 DigitalOcean Droplets, set NODE_1_IP…NODE_5_IP in .env.local
+// Per-domain node configuration.
+//
+// Architecture: Fault isolation per domain.
+// Each collection lives on its own dedicated single-node Couchbase instance
+// (one DigitalOcean Droplet each). If one domain's node goes down, all other
+// domains remain fully operational.
+//
+//   Droplet 1  →  Couchbase instance  →  university.academic.students
+//   Droplet 2  →  Couchbase instance  →  university.academic.teachers
+//   Droplet 3  →  Couchbase instance  →  university.academic.courses
+//   Droplet 4  →  Couchbase instance  →  university.academic.enrollments
+//   Droplet 5  →  Couchbase instance  →  university.academic.classes
+//
+// The Next.js /api layer is the gateway that makes all 5 look like one DB.
 
-export const CLUSTER_CONFIG = {
-  /**
-   * Bootstrap nodes — the Couchbase SDK sends the first connection to any of
-   * these IPs, then discovers the full cluster topology on its own.
-   * Listing all 5 gives maximum resilience at startup.
-   */
-  bootstrapNodes: [
-    process.env.NODE_1_IP || "YOUR_DROPLET_1_IP",
-    process.env.NODE_2_IP || "YOUR_DROPLET_2_IP",
-    process.env.NODE_3_IP || "YOUR_DROPLET_3_IP",
-    process.env.NODE_4_IP || "YOUR_DROPLET_4_IP",
-    process.env.NODE_5_IP || "YOUR_DROPLET_5_IP",
-  ],
-
-  /** Top-level Couchbase bucket */
-  bucket: "university",
-
-  /** Scope used to isolate the academic domain */
-  scope: "academic",
-
-  /** One collection per data domain */
-  collections: {
-    students: "students",
-    teachers: "teachers",
-    courses: "courses",
-    enrollments: "enrollments",
-    classes: "classes",
-  } as const,
-
-  auth: {
-    username: process.env.COUCHBASE_USERNAME || "Administrator",
-    password: process.env.COUCHBASE_PASSWORD || "your_password_here",
+export const DOMAIN_NODES = {
+  students: {
+    ip:         process.env.NODE_STUDENTS_IP    || "YOUR_STUDENTS_DROPLET_IP",
+    bucket:     "university",
+    scope:      "academic",
+    collection: "students",
+  },
+  teachers: {
+    ip:         process.env.NODE_TEACHERS_IP    || "YOUR_TEACHERS_DROPLET_IP",
+    bucket:     "university",
+    scope:      "academic",
+    collection: "teachers",
+  },
+  courses: {
+    ip:         process.env.NODE_COURSES_IP     || "YOUR_COURSES_DROPLET_IP",
+    bucket:     "university",
+    scope:      "academic",
+    collection: "courses",
+  },
+  enrollments: {
+    ip:         process.env.NODE_ENROLLMENTS_IP || "YOUR_ENROLLMENTS_DROPLET_IP",
+    bucket:     "university",
+    scope:      "academic",
+    collection: "enrollments",
+  },
+  classes: {
+    ip:         process.env.NODE_CLASSES_IP     || "YOUR_CLASSES_DROPLET_IP",
+    bucket:     "university",
+    scope:      "academic",
+    collection: "classes",
   },
 } as const;
 
-export type CollectionName = keyof typeof CLUSTER_CONFIG.collections;
+export const AUTH = {
+  username: process.env.COUCHBASE_USERNAME || "Administrator",
+  password: process.env.COUCHBASE_PASSWORD || "your_password_here",
+};
+
+export type DomainName = keyof typeof DOMAIN_NODES;
