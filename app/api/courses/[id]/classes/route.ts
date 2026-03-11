@@ -2,7 +2,7 @@
 // Creates a class section for this course.
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getCollection } from "@/lib/couchbase";
+import { getSnCollection } from "@/lib/couchbase-sn";
 import { safeCollectionFetch } from "@/lib/safeFetch";
 import { Course, Teacher, Class } from "@/lib/types";
 
@@ -22,9 +22,9 @@ export async function POST(
     }
 
     const [coursesCol, teachersCol, classesCol] = await Promise.all([
-      getCollection("courses"),
-      getCollection("teachers"),
-      getCollection("classes"),
+      getSnCollection("courses"),
+      getSnCollection("teachers"),
+      getSnCollection("classes"),
     ]);
 
     const [courseResult, teacherResult] = await Promise.all([

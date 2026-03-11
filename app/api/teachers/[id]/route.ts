@@ -1,6 +1,6 @@
 // app/api/teachers/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { getCollection } from "@/lib/couchbase";
+import { getSnCollection } from "@/lib/couchbase-sn";
 import { Teacher } from "@/lib/types";
 
 export async function GET(
@@ -9,7 +9,7 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const collection = await getCollection("teachers");
+    const collection = await getSnCollection("teachers");
     const result = await collection.get(id);
     return NextResponse.json(result.content as Teacher);
   } catch (err: unknown) {
@@ -30,7 +30,7 @@ export async function PUT(
     const { id } = await params;
     const body = await req.json();
     const doc: Teacher = { ...body, type: "teacher", id };
-    const collection = await getCollection("teachers");
+    const collection = await getSnCollection("teachers");
     await collection.upsert(id, doc);
     return NextResponse.json(doc);
   } catch (err) {
@@ -45,7 +45,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const collection = await getCollection("teachers");
+    const collection = await getSnCollection("teachers");
     await collection.remove(id);
     return new NextResponse(null, { status: 204 });
   } catch (err: unknown) {

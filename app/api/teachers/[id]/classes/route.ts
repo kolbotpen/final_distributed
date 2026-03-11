@@ -2,7 +2,7 @@
 // Creates a class taught by this teacher.
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getCollection } from "@/lib/couchbase";
+import { getSnCollection } from "@/lib/couchbase-sn";
 import { safeCollectionFetch } from "@/lib/safeFetch";
 import { Teacher, Course, Class } from "@/lib/types";
 
@@ -22,9 +22,9 @@ export async function POST(
     }
 
     const [teachersCol, coursesCol, classesCol] = await Promise.all([
-      getCollection("teachers"),
-      getCollection("courses"),
-      getCollection("classes"),
+      getSnCollection("teachers"),
+      getSnCollection("courses"),
+      getSnCollection("classes"),
     ]);
 
     const [teacherResult, courseResult] = await Promise.all([

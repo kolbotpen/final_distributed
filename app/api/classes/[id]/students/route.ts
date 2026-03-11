@@ -1,7 +1,7 @@
 // POST /api/classes/:id/students
 // Adds a student to an existing class (appends to class.studentIds).
 import { NextRequest, NextResponse } from "next/server";
-import { getCollection } from "@/lib/couchbase";
+import { getSnCollection } from "@/lib/couchbase-sn";
 import { safeCollectionFetch } from "@/lib/safeFetch";
 import { Class, Student } from "@/lib/types";
 
@@ -18,8 +18,8 @@ export async function POST(
     }
 
     const [classesCol, studentsCol] = await Promise.all([
-      getCollection("classes"),
-      getCollection("students"),
+      getSnCollection("classes"),
+      getSnCollection("students"),
     ]);
 
     const [classResult, studentResult] = await Promise.all([

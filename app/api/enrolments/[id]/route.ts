@@ -1,7 +1,7 @@
 // app/api/enrolments/[id]/route.ts
 // Cross-collection: enrolment + student + course fetched in parallel
 import { NextRequest, NextResponse } from "next/server";
-import { getCollection } from "@/lib/couchbase";
+import { getSnCollection } from "@/lib/couchbase-sn";
 import { safeCollectionFetch, resolveOrSentinel } from "@/lib/safeFetch";
 import { Enrolment, Student, Course } from "@/lib/types";
 
@@ -11,7 +11,7 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const enrolmentsCol = await getCollection("enrolments");
+    const enrolmentsCol = await getSnCollection("enrolments");
     const enrollResult = await safeCollectionFetch<Enrolment>(
       "enrolments",
       id,
@@ -29,8 +29,8 @@ export async function GET(
     const enrolment = enrollResult.data;
 
     const [studentsCol, coursesCol] = await Promise.all([
-      getCollection("students"),
-      getCollection("courses"),
+      getSnCollection("students"),
+      getSnCollection("courses"),
     ]);
 
     const [studentResult, courseResult] = await Promise.all([
@@ -63,7 +63,7 @@ export async function PUT(
   try {
     const body = await req.json();
     const doc: Enrolment = { ...body, type: "enrolment", id };
-    const collection = await getCollection("enrolments");
+    const collection = await getSnCollection("enrolments");
     await collection.upsert(id, doc);
     return NextResponse.json(doc);
   } catch (err) {
@@ -78,7 +78,7 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const collection = await getCollection("enrolments");
+    const collection = await getSnCollection("enrolments");
     await collection.remove(id);
     return new NextResponse(null, { status: 204 });
   } catch (err: unknown) {

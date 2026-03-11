@@ -2,7 +2,7 @@
 // Enrols a student in this course, creating an Enrolment document.
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getCollection } from "@/lib/couchbase";
+import { getSnCollection } from "@/lib/couchbase-sn";
 import { safeCollectionFetch } from "@/lib/safeFetch";
 import { Course, Student, Enrolment } from "@/lib/types";
 
@@ -19,9 +19,9 @@ export async function POST(
     }
 
     const [coursesCol, studentsCol, enrolmentsCol] = await Promise.all([
-      getCollection("courses"),
-      getCollection("students"),
-      getCollection("enrolments"),
+      getSnCollection("courses"),
+      getSnCollection("students"),
+      getSnCollection("enrolments"),
     ]);
 
     const [courseResult, studentResult] = await Promise.all([

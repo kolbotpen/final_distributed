@@ -147,20 +147,39 @@ export default function ResilienceTestPanel() {
       {/* How-to steps */}
       <details className="text-xs text-gray-500">
         <summary className="cursor-pointer font-medium text-gray-600 hover:text-gray-800">
-          How to demonstrate a node failure
+          How to demonstrate a node failure &amp; recovery
         </summary>
-        <ol className="mt-2 list-decimal list-inside space-y-1 pl-1">
-          <li>Run a test query above — confirm it succeeds with all 5 nodes up.</li>
-          <li>SSH into any one Droplet and run: <code className="font-mono bg-gray-100 px-1 rounded">systemctl stop couchbase-server</code></li>
-          <li>Watch the topology above show that node as <strong>down</strong>.</li>
-          <li>
-            On Node 1, trigger failover:{" "}
-            <code className="font-mono bg-gray-100 px-1 rounded">
-              couchbase-cli failover -c 127.0.0.1 -u Administrator -p Administrator123! --server-failover http://&lt;IP&gt;:8091 --force
-            </code>
-          </li>
-          <li>Run the test query again — it still succeeds because replicas were promoted.</li>
-        </ol>
+        <div className="mt-2 space-y-3">
+          <div>
+            <p className="font-medium text-gray-600 mb-1">Simulate failure</p>
+            <ol className="list-decimal list-inside space-y-1 pl-1">
+              <li>Run a test query above — confirm it succeeds with all 5 nodes up.</li>
+              <li>SSH into any one Droplet and run: <code className="font-mono bg-gray-100 px-1 rounded">systemctl stop couchbase-server</code></li>
+              <li>Wait ~30 seconds — auto-failover kicks in and promotes the replicas automatically.</li>
+              <li>Watch the topology show that node as <strong>down</strong>.</li>
+              <li>Run the test query again — it <strong>still succeeds</strong> because replicas were promoted with no data loss.</li>
+            </ol>
+          </div>
+          <div>
+            <p className="font-medium text-gray-600 mb-1">Recover the node</p>
+            <ol className="list-decimal list-inside space-y-1 pl-1">
+              <li>On the recovered Droplet: <code className="font-mono bg-gray-100 px-1 rounded">systemctl start couchbase-server</code></li>
+              <li>
+                On Node 1, re-add it:{" "}
+                <code className="font-mono bg-gray-100 px-1 rounded">
+                  couchbase-cli server-add -c 127.0.0.1 -u Administrator -p Administrator123! --server-add http://&lt;IP&gt;:8091 --server-add-username Administrator --server-add-password Administrator123! --services data,index,query
+                </code>
+              </li>
+              <li>
+                Rebalance:{" "}
+                <code className="font-mono bg-gray-100 px-1 rounded">
+                  couchbase-cli rebalance -c 127.0.0.1 -u Administrator -p Administrator123!
+                </code>
+              </li>
+              <li>Topology returns to <strong>all 5 nodes healthy</strong>.</li>
+            </ol>
+          </div>
+        </div>
       </details>
     </div>
   );

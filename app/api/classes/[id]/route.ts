@@ -1,7 +1,7 @@
 // app/api/classes/[id]/route.ts
 // Cross-collection composition: class + course + teacher + all students
 import { NextRequest, NextResponse } from "next/server";
-import { getCollection } from "@/lib/couchbase";
+import { getSnCollection } from "@/lib/couchbase-sn";
 import { safeCollectionFetch, resolveOrSentinel } from "@/lib/safeFetch";
 import { Class, Course, Teacher, Student } from "@/lib/types";
 
@@ -11,7 +11,7 @@ export async function GET(
 ) {
   const { id } = await params;
   try {
-    const classesCol = await getCollection("classes");
+    const classesCol = await getSnCollection("classes");
     const classResult = await safeCollectionFetch<Class>(
       "classes",
       id,
@@ -29,9 +29,9 @@ export async function GET(
     const classDoc = classResult.data;
 
     const [coursesCol, teachersCol, studentsCol] = await Promise.all([
-      getCollection("courses"),
-      getCollection("teachers"),
-      getCollection("students"),
+      getSnCollection("courses"),
+      getSnCollection("teachers"),
+      getSnCollection("students"),
     ]);
 
     // Fetch course and teacher in parallel
@@ -84,7 +84,7 @@ export async function PUT(
   try {
     const body = await req.json();
     const doc: Class = { ...body, type: "class", id };
-    const collection = await getCollection("classes");
+    const collection = await getSnCollection("classes");
     await collection.upsert(id, doc);
     return NextResponse.json(doc);
   } catch (err) {
@@ -99,7 +99,7 @@ export async function DELETE(
 ) {
   const { id } = await params;
   try {
-    const collection = await getCollection("classes");
+    const collection = await getSnCollection("classes");
     await collection.remove(id);
     return new NextResponse(null, { status: 204 });
   } catch (err: unknown) {

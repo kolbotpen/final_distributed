@@ -1,7 +1,7 @@
 // app/api/courses/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getClusterForDomain, getCollection } from "@/lib/couchbase";
+import { getSnCluster, getSnCollection } from "@/lib/couchbase-sn";
 import { Course } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
@@ -10,9 +10,9 @@ export async function GET(req: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") ?? "20", 10), 100);
     const offset = parseInt(searchParams.get("offset") ?? "0", 10);
 
-    const cluster = await getClusterForDomain("courses");
+    const cluster = await getSnCluster();
     const result = await cluster.query(
-      `SELECT c.* FROM \`university\`.\`academic\`.\`courses\` c
+      `SELECT c.* FROM \`university\`.\`sharednothing\`.\`courses\` c
        WHERE c.type = 'course'
        ORDER BY c.department, c.code
        LIMIT $limit OFFSET $offset`,
@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
       department: body.department,
     };
 
-    const collection = await getCollection("courses");
+    const collection = await getSnCollection("courses");
     await collection.insert(id, doc);
 
     return NextResponse.json(doc, { status: 201 });

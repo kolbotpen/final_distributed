@@ -1,7 +1,7 @@
 // app/api/enrolments/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
-import { getClusterForDomain, getCollection } from "@/lib/couchbase";
+import { getSnCluster, getSnCollection } from "@/lib/couchbase-sn";
 import { Enrolment } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
     const studentId = searchParams.get("studentId");
     const courseId = searchParams.get("courseId");
 
-    let query = `SELECT e.* FROM \`university\`.\`academic\`.\`enrolments\` e
+    let query = `SELECT e.* FROM \`university\`.\`sharednothing\`.\`enrolments\` e
                  WHERE e.type = 'enrolment'`;
     const params: Record<string, unknown> = { limit, offset };
 
@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
     }
     query += " ORDER BY e.enrolledAt DESC LIMIT $limit OFFSET $offset";
 
-    const cluster = await getClusterForDomain("enrolments");
+    const cluster = await getSnCluster();
     const result = await cluster.query(query, { parameters: params });
 
     return NextResponse.json({ data: result.rows, limit, offset });
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
       status: body.status ?? "active",
     };
 
-    const collection = await getCollection("enrolments");
+    const collection = await getSnCollection("enrolments");
     await collection.insert(id, doc);
 
     return NextResponse.json(doc, { status: 201 });
