@@ -3,6 +3,9 @@
 // Creates N1QL indexes on each domain node independently.
 // Each node hosts exactly one collection, so indexes are created domain by domain.
 
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
+
 import * as couchbase from "couchbase";
 import { DOMAIN_NODES, AUTH, DomainName } from "../config/cluster";
 
@@ -20,10 +23,10 @@ const DOMAIN_INDEXES: Record<DomainName, string[]> = {
     "CREATE PRIMARY INDEX IF NOT EXISTS ON `university`.`academic`.`courses`",
     "CREATE INDEX idx_courses_type IF NOT EXISTS ON `university`.`academic`.`courses`(`type`)",
   ],
-  enrollments: [
-    "CREATE PRIMARY INDEX IF NOT EXISTS ON `university`.`academic`.`enrollments`",
-    "CREATE INDEX idx_enrollments_student IF NOT EXISTS ON `university`.`academic`.`enrollments`(`studentId`)",
-    "CREATE INDEX idx_enrollments_course  IF NOT EXISTS ON `university`.`academic`.`enrollments`(`courseId`)",
+  enrolments: [
+    "CREATE PRIMARY INDEX IF NOT EXISTS ON `university`.`academic`.`enrolments`",
+    "CREATE INDEX idx_enrolments_student IF NOT EXISTS ON `university`.`academic`.`enrolments`(`studentId`)",
+    "CREATE INDEX idx_enrolments_course  IF NOT EXISTS ON `university`.`academic`.`enrolments`(`courseId`)",
   ],
   classes: [
     "CREATE PRIMARY INDEX IF NOT EXISTS ON `university`.`academic`.`classes`",

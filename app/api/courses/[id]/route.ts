@@ -5,11 +5,12 @@ import { Course } from "@/lib/types";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const collection = await getCollection("courses");
-    const result = await collection.get(params.id);
+    const result = await collection.get(id);
     return NextResponse.json(result.content as Course);
   } catch (err: unknown) {
     const cbErr = err as { cause?: { name?: string } };
@@ -23,13 +24,14 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const body = await req.json();
-    const doc: Course = { ...body, type: "course", id: params.id };
+    const doc: Course = { ...body, type: "course", id };
     const collection = await getCollection("courses");
-    await collection.upsert(params.id, doc);
+    await collection.upsert(id, doc);
     return NextResponse.json(doc);
   } catch (err) {
     console.error("[PUT /api/courses/:id]", err);
@@ -39,11 +41,12 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const collection = await getCollection("courses");
-    await collection.remove(params.id);
+    await collection.remove(id);
     return new NextResponse(null, { status: 204 });
   } catch (err: unknown) {
     const cbErr = err as { cause?: { name?: string } };

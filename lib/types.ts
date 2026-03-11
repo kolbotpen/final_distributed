@@ -33,8 +33,8 @@ export interface Course {
   department: string;
 }
 
-export interface Enrollment {
-  type: "enrollment";
+export interface Enrolment {
+  type: "enrolment";
   id: string;
   studentId: string;
   courseId: string;
@@ -65,6 +65,6 @@ export interface DomainHealth {
 
 export interface HealthResponse {
   overallStatus: "healthy" | "degraded" | "down";
-  // Keys are domain names: students, teachers, courses, enrollments, classes
+  // Keys are domain names: students, teachers, courses, enrolments, classes
   domains: Record<string, DomainHealth>;
 }

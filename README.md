@@ -51,95 +51,76 @@ Recommended specs:
 - **Size**: 2 vCPU / 4 GB RAM (each node only serves one collection)
 - **Firewall**: open ports **8091** (Management), **8093** (N1QL/Query), and **11210** (KV) from your Next.js server's IP only
 
-### Install Couchbase on each Droplet
+### Install Couchbase Community Edition on each Droplet
 
 SSH into each Droplet and run:
 
 ```bash
-curl -o couchbase-release.deb \
-  https://packages.couchbase.com/releases/couchbase-release/couchbase-release-1.0-amd64.deb
-dpkg -i couchbase-release.deb
-apt-get update && apt-get install -y couchbase-server
-systemctl enable couchbase-server && systemctl start couchbase-server
+# 1. Download the meta package
+curl -O https://packages.couchbase.com/releases/couchbase-release/couchbase-release-1.0-noarch.deb
+
+# 2. Install the meta package (adds the Couchbase apt repository)
+sudo apt install ./couchbase-release-1.0-noarch.deb
+
+# 3. Reload the local package database
+sudo apt-get update
+
+# 4. Install Couchbase Server Community Edition (latest)
+sudo apt-get install -y couchbase-server-community
 ```
+
+Once installation completes, Couchbase Server starts automatically. Verify it is running:
+
+```bash
+sudo systemctl status couchbase-server
+```
+
+Then open `http://DROPLET_IP:8091` in your browser to confirm the Web Console is accessible.
 
 Repeat on all 5 Droplets.
 
 ---
 
-## 2 — Form the Cluster
+## 2 — Initialize Each Node (standalone, no clustering)
 
-### Initialize the first node (Node 1)
-
-Open `http://DROPLET_1_IP:8091` in your browser.
+On **each** Droplet, open `http://DROPLET_IP:8091` in your browser:
 
 1. Click **Setup New Cluster**.
 2. Set:
-   - **Cluster name**: `university-cluster`
+   - **Cluster name**: `university-students` (or the relevant domain name — doesn't matter, each is standalone)
    - **Username**: `Administrator`
-   - **Password**: choose a secure password
-3. Accept the terms and click **Finish with Defaults** (or configure RAM quotas manually — set ≥512 MB for Data service).
+   - **Password**: use the same password on all 5 nodes (matches `COUCHBASE_PASSWORD` in `.env.local`)
+3. Complete the wizard with defaults.
 
-### Add the remaining nodes (Nodes 2–5)
-
-Still logged in on **Node 1's UI**:
-
-1. Go to **Servers → Add Server**.
-2. Enter `DROPLET_2_IP` (no port needed).
-3. Enter the `Administrator` credentials.
-4. Enable the services you want on this node: **Data**, **Query**, **Index** (enable all three on every node for full redundancy).
-5. Click **Add Server**.
-6. Repeat for nodes 3, 4, and 5.
-
-After all 5 nodes appear in the list:
-
-1. Click **Rebalance**.
-2. Wait for rebalancing to complete — vBuckets are distributed across all nodes automatically.
+> **Do not join these nodes together.** Each is a completely independent single-node instance.
 
 ---
 
-## 3 — Create Bucket, Scope, and Collections
+## 3 — Create Bucket, Scope, and Collection on Each Node
 
-### Via the Web UI (easiest)
+Repeat the following on **each** of the 5 Droplets, substituting `<COLLECTION>` with the domain name (`students`, `teachers`, `courses`, `enrollments`, or `classes`):
 
-1. Go to **Buckets → Add Bucket**.
-   - Name: `university`
-   - Type: `Couchbase`
-   - RAM Quota: at least 1 024 MB
-   - Replicas: **2** (data survives 2 simultaneous node failures)
-2. Click **Add Bucket**.
+### Via the Web UI
 
-3. Go to **Scopes & Collections** inside the `university` bucket.
-4. Click **Add Scope** → name it `academic`.
-5. Inside `academic`, click **Add Collection** five times:
-   - `students`
-   - `teachers`
-   - `courses`
-   - `enrollments`
-   - `classes`
+1. **Buckets → Add Bucket**: name `university`, RAM Quota ≥ 512 MB, replicas 0 (single node).
+2. **Scopes & Collections** inside `university` → **Add Scope**: `academic`.
+3. Inside `academic` → **Add Collection**: `<COLLECTION>`.
 
-### Via CLI (alternative)
+### Via CLI (run from inside the Droplet)
 
 ```bash
-# Run from any node or any machine with couchbase-cli installed
-CB="couchbase-cli -c DROPLET_1_IP -u Administrator -p YOUR_PASSWORD"
-
+CB="couchbase-cli -c 127.0.0.1 -u Administrator -p Administrator123!"
 $CB bucket-create --bucket university --bucket-type couchbase \
-    --bucket-ramsize 1024 --bucket-replica 2
-
+    --bucket-ramsize 512 --bucket-replica 0
 $CB collection-manage --bucket university --create-scope academic
-
-for c in students teachers courses enrollments classes; do
-  $CB collection-manage --bucket university \
-      --create-collection "academic.$c"
-done
+$CB collection-manage --bucket university --create-collection "academic.<COLLECTION>"
 ```
 
 ---
 
 ## 4 — Environment Config
 
-Copy the example file and fill in your Droplet IPs:
+Copy the example file and fill in each Droplet's public IP:
 
 ```bash
 cp .env.local.example .env.local
@@ -148,11 +129,11 @@ cp .env.local.example .env.local
 Edit `.env.local`:
 
 ```
-NODE_1_IP=YOUR_DROPLET_1_IP
-NODE_2_IP=YOUR_DROPLET_2_IP
-NODE_3_IP=YOUR_DROPLET_3_IP
-NODE_4_IP=YOUR_DROPLET_4_IP
-NODE_5_IP=YOUR_DROPLET_5_IP
+NODE_STUDENTS_IP=YOUR_STUDENTS_DROPLET_IP
+NODE_TEACHERS_IP=YOUR_TEACHERS_DROPLET_IP
+NODE_COURSES_IP=YOUR_COURSES_DROPLET_IP
+NODE_ENROLLMENTS_IP=YOUR_ENROLLMENTS_DROPLET_IP
+NODE_CLASSES_IP=YOUR_CLASSES_DROPLET_IP
 COUCHBASE_USERNAME=Administrator
 COUCHBASE_PASSWORD=your_password_here
 ```
@@ -201,32 +182,28 @@ The **Dashboard** page shows a live cluster topology map (polling `/api/health` 
 
 ## Fault Tolerance
 
-### Node failure and vBucket rebalancing
+### Domain-level isolation
 
-When a Couchbase node goes down:
+Because each domain runs on an independent Couchbase instance:
 
-1. The surviving nodes detect the failure via the gossip protocol within a few seconds.
-2. Couchbase promotes **replica vBuckets** (stored on other nodes) to become active vBuckets.
-3. The client SDK receives an updated vBucket map and starts routing requests to the new owners.
-4. **No application restart required** — the SDK handles failover transparently.
-5. Once the failed node is repaired and rejoined, a rebalance redistributes vBuckets evenly again.
-
-With **2 replicas** configured, the cluster can survive **2 simultaneous node failures** out of 5.
+- A crash or restart on the `students` node **does not affect** `teachers`, `courses`, or any other domain.
+- The health dashboard at `/api/health` shows per-domain status and latency independently.
+- Cross-domain endpoints (`GET /api/enrollments/:id`, `GET /api/classes/:id`) fan out to multiple nodes in parallel. If one domain is unreachable the API still returns all the data it can.
 
 ### Collection-level error isolation (`safeCollectionFetch`)
 
-Cross-collection API endpoints (e.g. `GET /api/classes/:id`) assemble a response from multiple collections in parallel.  
+Cross-collection API endpoints assemble a response from multiple collections in parallel.  
 `lib/safeFetch.ts` wraps each individual collection fetch:
 
 - If a document **doesn't exist** → returns `{ status: "not_found", id, collection }`.
-- If a collection is **temporarily unreachable** (rebalancing, node failure) → returns `{ status: "unavailable", id, collection }`.
+- If a node is **temporarily unreachable** → returns `{ status: "unavailable", id, collection }`.
 
-The caller (`api/classes/[id]/route.ts`) converts each result via `resolveOrSentinel()`:
+The caller converts each result via `resolveOrSentinel()`:
 
 - `ok` → returns the full document.
 - `unavailable` / `not_found` → returns `{ id, _collectionStatus: "unavailable" | "not_found" }`.
 
-The UI renders a `CollectionStatusBadge` warning for any sentinel object, so **one unavailable collection never crashes the whole page**.
+The UI renders a `CollectionStatusBadge` warning for any sentinel object, so **one unavailable domain never crashes the whole page**.
 
 ---
 
@@ -264,16 +241,24 @@ The UI renders a `CollectionStatusBadge` warning for any sentinel object, so **o
 
 ---
 
-## Connection String Internals
+## Connection Pattern
 
-The SDK connection string:
+Each API route calls `getClusterForDomain(domain)` from `lib/couchbase.ts`:
 
+```typescript
+// lib/couchbase.ts (simplified)
+const connections = new Map<DomainName, couchbase.Cluster>();
+
+export async function getClusterForDomain(domain: DomainName) {
+  if (!connections.has(domain)) {
+    const { ip } = DOMAIN_NODES[domain];
+    const cluster = await couchbase.connect(`couchbase://${ip}`, AUTH);
+    connections.set(domain, cluster);
+  }
+  return connections.get(domain)!;
+}
 ```
-couchbase://NODE_1_IP,NODE_2_IP,NODE_3_IP,NODE_4_IP,NODE_5_IP
-```
 
-- On first connect, the SDK contacts **any listed node** and requests the **cluster map** (JSON document describing which node owns which vBucket).
-- For every subsequent KV operation the SDK hashes the document key to a vBucket number, looks up the owning node in the cluster map, and **opens a direct TCP connection to that node** — no hop through Node 1.
-- If a node goes offline, the SDK receives a `NOT_MY_VBUCKET` error and re-fetches the cluster map to route to the new owner.
-
-This is the core of shared-nothing: the coordinator has been replaced by the client-side routing table.
+- **First call** for a domain opens a TCP connection to that Droplet's Couchbase and caches it for the lifetime of the Node.js process.
+- **Subsequent calls** reuse the cached connection — no per-request reconnect overhead.
+- Each domain has a completely **independent connection** to its own server. A TCP error on one domain does not affect others.

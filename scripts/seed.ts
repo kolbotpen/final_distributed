@@ -4,10 +4,13 @@
 // Each domain is a separate single-node instance; this script connects to
 // each one independently so no single failure affects the other domains.
 
+import { loadEnvConfig } from "@next/env";
+loadEnvConfig(process.cwd());
+
 import * as couchbase from "couchbase";
 import { v4 as uuidv4 } from "uuid";
 import { DOMAIN_NODES, AUTH, DomainName } from "../config/cluster";
-import { Student, Teacher, Course, Enrollment, Class } from "../lib/types";
+import { Student, Teacher, Course, Enrolment, Class } from "../lib/types";
 
 // ── Sample data ──────────────────────────────────────────────────────────────
 
@@ -91,14 +94,14 @@ async function main() {
   );
   await cluster.close();
 
-  // ── Enrollments node ───────────────────────────────────────────────────────
-  cluster = await connectToDomain("enrollments");
-  console.log("Seeding enrollments…");
-  const enrollmentsCol = cluster.bucket("university").scope("academic").collection("enrollments");
+  // ── Enrolments node ───────────────────────────────────────────────────────
+  cluster = await connectToDomain("enrolments");
+  console.log("Seeding enrolments…");
+  const enrolmentsCol = cluster.bucket("university").scope("academic").collection("enrolments");
   for (let i = 0; i < 5; i++) {
     const id = uuidv4();
-    const doc: Enrollment = {
-      type: "enrollment",
+    const doc: Enrolment = {
+      type: "enrolment",
       id,
       studentId: studentIds[i],
       courseId:  courseIds[i % courseIds.length],
@@ -106,7 +109,7 @@ async function main() {
       grade: i < 3 ? (["A", "B+", "A-"] as const)[i] : null,
       status: i < 4 ? "active" : "completed",
     };
-    await enrollmentsCol.upsert(id, doc);
+    await enrolmentsCol.upsert(id, doc);
     console.log(`  Inserted ${id}`);
   }
   await cluster.close();

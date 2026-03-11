@@ -7,15 +7,16 @@ import { Class, Course, Teacher, Student } from "@/lib/types";
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const classesCol = await getCollection("classes");
     const classResult = await safeCollectionFetch<Class>(
       "classes",
-      params.id,
+      id,
       async () => {
-        const r = await classesCol.get(params.id);
+        const r = await classesCol.get(id);
         return r.content as Class;
       }
     );
@@ -77,13 +78,14 @@ export async function GET(
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const body = await req.json();
-    const doc: Class = { ...body, type: "class", id: params.id };
+    const doc: Class = { ...body, type: "class", id };
     const collection = await getCollection("classes");
-    await collection.upsert(params.id, doc);
+    await collection.upsert(id, doc);
     return NextResponse.json(doc);
   } catch (err) {
     console.error("[PUT /api/classes/:id]", err);
@@ -93,11 +95,12 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params;
   try {
     const collection = await getCollection("classes");
-    await collection.remove(params.id);
+    await collection.remove(id);
     return new NextResponse(null, { status: 204 });
   } catch (err: unknown) {
     const cbErr = err as { cause?: { name?: string } };

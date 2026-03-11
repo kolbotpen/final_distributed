@@ -12,7 +12,7 @@ const DOMAIN_LABELS: Record<string, { emoji: string; label: string }> = {
   students:    { emoji: "🎓", label: "Students" },
   teachers:    { emoji: "👨‍🏫", label: "Teachers" },
   courses:     { emoji: "📚", label: "Courses" },
-  enrollments: { emoji: "📋", label: "Enrollments" },
+  enrolments: { emoji: "📋", label: "Enrolments" },
   classes:     { emoji: "🏫", label: "Classes" },
 };
 
@@ -70,7 +70,7 @@ export default function ClusterTopology() {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, []);
 
-  const domainOrder = ["students", "teachers", "courses", "enrollments", "classes"];
+  const domainOrder = ["students", "teachers", "courses", "enrolments", "classes"];
 
   return (
     <section className="bg-gray-50 rounded-2xl p-6 border border-gray-100">

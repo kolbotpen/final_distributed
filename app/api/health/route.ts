@@ -1,22 +1,25 @@
 // app/api/health/route.ts
 // Per-domain node health check.
 //
-// Each domain (students, teachers, courses, enrollments, classes) is hosted on
+// Each domain (students, teachers, courses, enrolments, classes) is hosted on
 // its own dedicated Couchbase instance. We ping each independently so the
 // dashboard can show exactly which domain's node is up or down.
 
 import { NextResponse } from "next/server";
-import { DOMAIN_NODES, DomainName } from "@/config/cluster";
+import { DOMAIN_NODES, AUTH, DomainName } from "@/config/cluster";
 import { HealthResponse, DomainHealth } from "@/lib/types";
 
 async function pingDomain(domain: DomainName): Promise<DomainHealth> {
   const node = DOMAIN_NODES[domain];
+  const credentials = Buffer.from(`${AUTH.username}:${AUTH.password}`).toString("base64");
   const start = Date.now();
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
     const res = await fetch(`http://${node.ip}:8091/pools`, {
       signal: controller.signal,
+      cache: "no-store",
+      headers: { Authorization: `Basic ${credentials}` },
     });
     clearTimeout(timer);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);

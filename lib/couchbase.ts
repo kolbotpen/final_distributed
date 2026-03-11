@@ -1,7 +1,7 @@
 // lib/couchbase.ts
 // Per-domain cluster connection factory.
 //
-// Each domain (students, teachers, courses, enrollments, classes) has its own
+// Each domain (students, teachers, courses, enrolments, classes) has its own
 // dedicated single-node Couchbase instance on a separate Droplet.
 // A separate connection is cached per domain so repeated API calls reuse the
 // same established TCP connection to that node.

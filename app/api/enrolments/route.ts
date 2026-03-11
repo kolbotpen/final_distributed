@@ -1,8 +1,8 @@
-// app/api/enrollments/route.ts
+// app/api/enrolments/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { v4 as uuidv4 } from "uuid";
 import { getClusterForDomain, getCollection } from "@/lib/couchbase";
-import { Enrollment } from "@/lib/types";
+import { Enrolment } from "@/lib/types";
 
 export async function GET(req: NextRequest) {
   try {
@@ -12,8 +12,8 @@ export async function GET(req: NextRequest) {
     const studentId = searchParams.get("studentId");
     const courseId = searchParams.get("courseId");
 
-    let query = `SELECT e.* FROM \`university\`.\`academic\`.\`enrollments\` e
-                 WHERE e.type = 'enrollment'`;
+    let query = `SELECT e.* FROM \`university\`.\`academic\`.\`enrolments\` e
+                 WHERE e.type = 'enrolment'`;
     const params: Record<string, unknown> = { limit, offset };
 
     if (studentId) {
@@ -26,13 +26,13 @@ export async function GET(req: NextRequest) {
     }
     query += " ORDER BY e.enrolledAt DESC LIMIT $limit OFFSET $offset";
 
-    const cluster = await getClusterForDomain("enrollments");
+    const cluster = await getClusterForDomain("enrolments");
     const result = await cluster.query(query, { parameters: params });
 
     return NextResponse.json({ data: result.rows, limit, offset });
   } catch (err) {
-    console.error("[GET /api/enrollments]", err);
-    return NextResponse.json({ error: "Failed to fetch enrollments" }, { status: 500 });
+    console.error("[GET /api/enrolments]", err);
+    return NextResponse.json({ error: "Failed to fetch enrolments" }, { status: 500 });
   }
 }
 
@@ -42,8 +42,8 @@ export async function POST(req: NextRequest) {
     const id = uuidv4();
     const now = new Date().toISOString();
 
-    const doc: Enrollment = {
-      type: "enrollment",
+    const doc: Enrolment = {
+      type: "enrolment",
       id,
       studentId: body.studentId,
       courseId: body.courseId,
@@ -52,12 +52,12 @@ export async function POST(req: NextRequest) {
       status: body.status ?? "active",
     };
 
-    const collection = await getCollection("enrollments");
+    const collection = await getCollection("enrolments");
     await collection.insert(id, doc);
 
     return NextResponse.json(doc, { status: 201 });
   } catch (err) {
-    console.error("[POST /api/enrollments]", err);
-    return NextResponse.json({ error: "Failed to create enrollment" }, { status: 500 });
+    console.error("[POST /api/enrolments]", err);
+    return NextResponse.json({ error: "Failed to create enrolment" }, { status: 500 });
   }
 }

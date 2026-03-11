@@ -8,7 +8,7 @@ const links = [
   { href: "/students", label: "Students" },
   { href: "/teachers", label: "Teachers" },
   { href: "/courses", label: "Courses" },
-  { href: "/enrollments", label: "Enrollments" },
+  { href: "/enrolments", label: "Enrolments" },
   { href: "/classes", label: "Classes" },
 ];
 
