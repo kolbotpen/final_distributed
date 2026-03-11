@@ -68,3 +68,16 @@ export interface HealthResponse {
   // Keys are domain names: students, teachers, courses, enrolments, classes
   domains: Record<string, DomainHealth>;
 }
+
+// Shared-nothing cluster health — one entry per cluster node
+export interface ClusterNodeHealth {
+  nodeIndex: number;
+  ip: string;
+  nodeStatus: "up" | "down";
+  latencyMs: number | null;
+}
+
+export interface SnHealthResponse {
+  overallStatus: "healthy" | "degraded" | "down";
+  nodes: ClusterNodeHealth[];
+}

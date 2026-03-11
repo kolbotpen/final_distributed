@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "next lint",
     "setup-indexes": "ts-node --project tsconfig.scripts.json scripts/setup-indexes.ts",
-    "seed": "ts-node --project tsconfig.scripts.json scripts/seed.ts"
+    "seed": "ts-node --project tsconfig.scripts.json scripts/seed.ts",
+    "setup-indexes-sn": "ts-node --project tsconfig.scripts.json scripts/setup-indexes-sn.ts",
+    "seed-sn": "ts-node --project tsconfig.scripts.json scripts/seed-sn.ts"
   },
   "dependencies": {
     "couchbase": "^4.3.0",
