@@ -3,12 +3,26 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import EntityCard from "@/components/EntityCard";
-import { Class } from "@/lib/types";
+import { Class, Course, Teacher } from "@/lib/types";
 
 function CreateClassModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ courseId: "", teacherId: "", semester: "", year: new Date().getFullYear().toString(), room: "", schedule: "" });
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [teachers, setTeachers] = useState<Teacher[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/courses?limit=200").then((r) => r.json()),
+      fetch("/api/teachers?limit=200").then((r) => r.json()),
+    ]).then(([cd, td]) => {
+      setCourses(cd.data ?? []);
+      setTeachers(td.data ?? []);
+      setLoadingOptions(false);
+    });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -39,22 +53,43 @@ function CreateClassModal({ onClose, onCreated }: { onClose: () => void; onCreat
         </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-3">
-          {(["courseId", "teacherId"] as const).map((field) => (
-            <div key={field}>
-              <label className="block text-xs font-medium text-gray-600 mb-1 capitalize">{field}</label>
-              <input
-                required
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300"
-                placeholder="uuid"
-                value={form[field]}
-                onChange={(e) => setForm({ ...form, [field]: e.target.value })}
-              />
-            </div>
-          ))}
+          <div>
+            <label htmlFor="courseId" className="block text-xs font-medium text-gray-600 mb-1">Course</label>
+            <select
+              id="courseId"
+              required
+              disabled={loadingOptions}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
+              value={form.courseId}
+              onChange={(e) => setForm({ ...form, courseId: e.target.value })}
+            >
+              <option value="">{loadingOptions ? "Loading…" : "Select a course"}</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.title} ({c.code})</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label htmlFor="teacherId" className="block text-xs font-medium text-gray-600 mb-1">Teacher</label>
+            <select
+              id="teacherId"
+              required
+              disabled={loadingOptions}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
+              value={form.teacherId}
+              onChange={(e) => setForm({ ...form, teacherId: e.target.value })}
+            >
+              <option value="">{loadingOptions ? "Loading…" : "Select a teacher"}</option>
+              {teachers.map((t) => (
+                <option key={t.id} value={t.id}>{t.firstName} {t.lastName}</option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Semester</label>
+              <label htmlFor="semester" className="block text-xs font-medium text-gray-600 mb-1">Semester</label>
               <select
+                id="semester"
                 required
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 value={form.semester}
@@ -67,8 +102,9 @@ function CreateClassModal({ onClose, onCreated }: { onClose: () => void; onCreat
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-1">Year</label>
+              <label htmlFor="year" className="block text-xs font-medium text-gray-600 mb-1">Year</label>
               <input
+                id="year"
                 required type="number" min="2000" max="2100"
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
                 value={form.year}
