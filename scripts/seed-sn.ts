@@ -78,25 +78,45 @@ async function main() {
   const courseIds  = await insertAll<Course> (scope.collection("courses"),  "courses",    COURSES);
   const studentIds = await insertAll<Student>(scope.collection("students"), "students",   STUDENTS);
 
-  // Enrolments — link each student to a course
-  console.log("\n[enrolments] Inserting 5 documents…");
+  // Enrolments — each student enrolls in the course matching their index
+  // (student 0 → course 0, student 1 → course 1, …)
+  // Plus add a couple of students to the same course to show multi-student classes.
+  console.log("\n[enrolments] Inserting enrolment documents…");
   const enrolmentsCol = scope.collection("enrolments");
-  for (let i = 0; i < 5; i++) {
+
+  // courseEnrolments[courseIndex] = [studentIds enrolled in that course]
+  const courseEnrolments: string[][] = COURSES.map(() => []);
+
+  const enrolmentPairs: { studentIdx: number; courseIdx: number }[] = [
+    { studentIdx: 0, courseIdx: 0 }, // Liam      → CS101
+    { studentIdx: 1, courseIdx: 0 }, // Amara     → CS101
+    { studentIdx: 2, courseIdx: 1 }, // Chen       → MATH201
+    { studentIdx: 3, courseIdx: 2 }, // Isabella  → PHYS101
+    { studentIdx: 4, courseIdx: 3 }, // Nikolai   → HIST305
+    { studentIdx: 0, courseIdx: 4 }, // Liam      → CHEM202
+    { studentIdx: 2, courseIdx: 4 }, // Chen      → CHEM202
+  ];
+
+  const grades = ["A", "B+", "A-", null, null, "B", null];
+  for (let i = 0; i < enrolmentPairs.length; i++) {
+    const { studentIdx, courseIdx } = enrolmentPairs[i];
     const id = uuidv4();
     const doc: Enrolment = {
       type:       "enrolment",
       id,
-      studentId:  studentIds[i],
-      courseId:   courseIds[i % courseIds.length],
+      studentId:  studentIds[studentIdx],
+      courseId:   courseIds[courseIdx],
       enrolledAt: new Date().toISOString(),
-      grade:      i < 3 ? (["A", "B+", "A-"] as const)[i] : null,
-      status:     i < 4 ? "active" : "completed",
+      grade:      grades[i] as string | null,
+      status:     i < 5 ? "active" : "completed",
     };
     await enrolmentsCol.upsert(id, doc);
-    console.log(`  ✓ ${id}`);
+    courseEnrolments[courseIdx].push(studentIds[studentIdx]);
+    console.log(`  ✓ ${STUDENTS[studentIdx].firstName} → ${COURSES[courseIdx].code}  (${id})`);
   }
 
-  // Classes — link each course + teacher + some students
+  // Classes — one class per course, taught by the teacher from the same department,
+  // with only the students who enrolled in that course.
   console.log("\n[classes] Inserting 5 documents…");
   const classesCol = scope.collection("classes");
   const schedules = [
@@ -106,26 +126,29 @@ async function main() {
     "Tue/Thu 14:00–16:00",
     "Fri 09:00–12:00",
   ] as const;
-  for (let i = 0; i < 5; i++) {
+
+  // Each course's teacher is the one from the same department (indices align).
+  for (let i = 0; i < COURSES.length; i++) {
     const id = uuidv4();
     const doc: Class = {
       type:       "class",
       id,
       courseId:   courseIds[i],
-      teacherId:  teacherIds[i],
-      studentIds: studentIds.slice(0, 3 + (i % 3)),
+      teacherId:  teacherIds[i],           // TEACHERS[i].department === COURSES[i].department
+      studentIds: courseEnrolments[i],     // only students enrolled in this course
       semester:   i % 2 === 0 ? "Fall" : "Spring",
       year:       2024 + Math.floor(i / 2),
       room:       `Building ${String.fromCharCode(65 + i)}-${101 + i * 10}`,
       schedule:   schedules[i],
     };
     await classesCol.upsert(id, doc);
-    console.log(`  ✓ ${id}`);
+    console.log(`  ✓ ${COURSES[i].code} | teacher: ${TEACHERS[i].firstName} ${TEACHERS[i].lastName} | students: ${courseEnrolments[i].length}  (${id})`);
   }
 
   await cluster.close();
-  console.log("\n\u2713 Seed complete — 25 documents in university.sharednothing.*");
-  console.log("  Documents are distributed across vBuckets on all cluster nodes.");
+  console.log("\n✓ Seed complete — 27 documents in university.sharednothing.*");
+  console.log("  Each class only contains students enrolled in that course.");
+  console.log("  Each teacher matches their course department.");
 }
 
 main().catch((err) => {
