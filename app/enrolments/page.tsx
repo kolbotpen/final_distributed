@@ -3,12 +3,26 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import EntityCard from "@/components/EntityCard";
-import { Enrolment } from "@/lib/types";
+import { Enrolment, Student, Course } from "@/lib/types";
 
 function CreateEnrolmentModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState({ studentId: "", courseId: "", status: "active", grade: "" });
+  const [students, setStudents] = useState<Student[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    Promise.all([
+      fetch("/api/students?limit=200").then((r) => r.json()),
+      fetch("/api/courses?limit=200").then((r) => r.json()),
+    ]).then(([sd, cd]) => {
+      setStudents(sd.data ?? []);
+      setCourses(cd.data ?? []);
+      setLoadingOptions(false);
+    });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -41,28 +55,41 @@ function CreateEnrolmentModal({ onClose, onCreated }: { onClose: () => void; onC
         {error && <p className="text-red-600 text-sm">{error}</p>}
         <form onSubmit={handleSubmit} className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Student ID</label>
-            <input
+            <label htmlFor="studentId" className="block text-xs font-medium text-gray-600 mb-1">Student</label>
+            <select
+              id="studentId"
               required
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              placeholder="uuid"
+              disabled={loadingOptions}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
               value={form.studentId}
               onChange={(e) => setForm({ ...form, studentId: e.target.value })}
-            />
+            >
+              <option value="">{loadingOptions ? "Loading…" : "Select a student"}</option>
+              {students.map((s) => (
+                <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Course ID</label>
-            <input
+            <label htmlFor="courseId" className="block text-xs font-medium text-gray-600 mb-1">Course</label>
+            <select
+              id="courseId"
               required
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-300"
-              placeholder="uuid"
+              disabled={loadingOptions}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300 disabled:opacity-50"
               value={form.courseId}
               onChange={(e) => setForm({ ...form, courseId: e.target.value })}
-            />
+            >
+              <option value="">{loadingOptions ? "Loading…" : "Select a course"}</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{c.title} ({c.code})</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Status</label>
+            <label htmlFor="status" className="block text-xs font-medium text-gray-600 mb-1">Status</label>
             <select
+              id="status"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
               value={form.status}
               onChange={(e) => setForm({ ...form, status: e.target.value })}
