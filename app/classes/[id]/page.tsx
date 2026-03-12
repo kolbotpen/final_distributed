@@ -29,40 +29,74 @@ export default function ClassDetailPage() {
   const router = useRouter();
   const [data, setData] = useState<ClassDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const [allStudents, setAllStudents] = useState<Student[]>([]);
-  const [selectedStudentId, setSelectedStudentId] = useState("");
+  const [eligibleStudents, setEligibleStudents] = useState<Student[]>([]);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [addingStudent, setAddingStudent] = useState(false);
   const [addError, setAddError] = useState("");
 
-  function loadClass() {
-    return fetch(`/api/classes/${id}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then(setData)
-      .catch(() => setData(null));
+  async function loadClass(): Promise<ClassDetail | null> {
+    try {
+      const r = await fetch(`/api/classes/${id}`);
+      if (!r.ok) { setData(null); return null; }
+      const d: ClassDetail = await r.json();
+      setData(d);
+      return d;
+    } catch { setData(null); return null; }
+  }
+
+  async function loadEligibleStudents(courseId: string) {
+    const [enrRes, stuRes] = await Promise.all([
+      fetch(`/api/enrolments?courseId=${encodeURIComponent(courseId)}&limit=200`).then((r) => r.json()),
+      fetch("/api/students?limit=200").then((r) => r.json()),
+    ]);
+    const enrolledIds = new Set<string>(
+      (enrRes.data ?? []).map((e: { studentId: string }) => e.studentId)
+    );
+    setEligibleStudents(
+      (stuRes.data ?? []).filter((s: Student) => enrolledIds.has(s.id))
+    );
   }
 
   useEffect(() => {
-    Promise.all([
-      loadClass(),
-      fetch("/api/students?limit=200").then((r) => r.json()).then((d) => setAllStudents(d.data ?? [])),
-    ]).finally(() => setLoading(false));
+    loadClass()
+      .then((classData) => {
+        if (classData?.courseId) return loadEligibleStudents(classData.courseId);
+      })
+      .finally(() => setLoading(false));
   }, [id]);
 
-  async function handleAddStudent() {
-    if (!selectedStudentId) return;
+  function toggleStudent(studentId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(studentId)) next.delete(studentId); else next.add(studentId);
+      return next;
+    });
+  }
+
+  async function handleAddStudents() {
+    if (selectedIds.size === 0) return;
     setAddingStudent(true);
     setAddError("");
     try {
-      const res = await fetch(`/api/classes/${id}/students`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentId: selectedStudentId }),
-      });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.error ?? "Failed"); }
-      setSelectedStudentId("");
-      await loadClass();
+      await Promise.all(
+        [...selectedIds].map((studentId) =>
+          fetch(`/api/classes/${id}/students`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ studentId }),
+          }).then(async (res) => {
+            if (!res.ok) {
+              const d = await res.json();
+              if (d.error !== "Student already in class") throw new Error(d.error ?? "Failed");
+            }
+          })
+        )
+      );
+      setSelectedIds(new Set());
+      const updated = await loadClass();
+      if (updated?.courseId) await loadEligibleStudents(updated.courseId);
     } catch (err: unknown) {
-      setAddError(err instanceof Error ? err.message : "Failed to add student");
+      setAddError(err instanceof Error ? err.message : "Failed to add students");
     } finally {
       setAddingStudent(false);
     }
@@ -116,31 +150,44 @@ export default function ClassDetailPage() {
           </h2>
         </div>
 
-        {/* Add student row */}
-        <div className="flex gap-2 items-center">
-          <label htmlFor="addStudentSelect" className="sr-only">Add a student</label>
-          <select
-            id="addStudentSelect"
-            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
-            value={selectedStudentId}
-            onChange={(e) => setSelectedStudentId(e.target.value)}
-          >
-            <option value="">Add a student…</option>
-            {allStudents
-              .filter((s) => !data.studentIds.includes(s.id))
-              .map((s) => (
-                <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
-              ))}
-          </select>
-          <button
-            disabled={!selectedStudentId || addingStudent}
-            onClick={handleAddStudent}
-            className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-40"
-          >
-            {addingStudent ? "Adding…" : "Add"}
-          </button>
-        </div>
-        {addError && <p className="text-red-600 text-xs">{addError}</p>}
+        {/* Add enrolled students */}
+        {(() => {
+          const available = eligibleStudents.filter((s) => !data.studentIds.includes(s.id));
+          if (available.length === 0) return (
+            <p className="text-xs text-gray-400">All enrolled students are already in this class.</p>
+          );
+          return (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500 font-medium">Add enrolled students:</p>
+              <div className="max-h-40 overflow-y-auto border border-gray-100 rounded-lg divide-y divide-gray-50">
+                {available.map((s) => (
+                  <label key={s.id} className="flex items-center gap-2 px-3 py-2 hover:bg-indigo-50 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      className="accent-indigo-600"
+                      checked={selectedIds.has(s.id)}
+                      onChange={() => toggleStudent(s.id)}
+                    />
+                    <span className="text-sm text-gray-800">{s.firstName} {s.lastName}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  disabled={selectedIds.size === 0 || addingStudent}
+                  onClick={handleAddStudents}
+                  className="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-40"
+                >
+                  {addingStudent ? "Adding…" : `Add ${selectedIds.size > 0 ? `(${selectedIds.size})` : ""}`}
+                </button>
+                {selectedIds.size > 0 && (
+                  <button onClick={() => setSelectedIds(new Set())} className="text-xs text-gray-400 hover:text-gray-600">Clear</button>
+                )}
+              </div>
+              {addError && <p className="text-red-600 text-xs">{addError}</p>}
+            </div>
+          );
+        })()}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {data.students.map((s, i) =>
